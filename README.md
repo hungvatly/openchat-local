@@ -75,6 +75,49 @@ Everything runs on your computer. No cloud. No API keys. No subscriptions.
 
 ---
 
+## System Requirements
+
+### Minimum (CPU-only)
+
+| Component | Requirement |
+|-----------|-------------|
+| CPU | Any x86_64 with AVX2 (Intel 4th gen+ / AMD Zen+) |
+| RAM | 8 GB (16 GB recommended) |
+| GPU | Not required |
+| Storage | ~5 GB free (SSD preferred) |
+| OS | Windows 10+, macOS 14+, Ubuntu 20.04+ |
+| Models | 1.5B - 3B (qwen2.5:1.5b, phi3:mini, llama3.2:3b) |
+| Speed | ~5-12 tokens/sec |
+
+### Recommended (GPU)
+
+| Component | Requirement |
+|-----------|-------------|
+| RAM | 16 - 32 GB |
+| GPU | 6 - 8 GB VRAM (any vendor) |
+| Models | 7B - 8B (llama3.1:8b, mistral:7b) |
+| Speed | ~25-45 tokens/sec |
+
+### Optimal (Power User)
+
+| Component | Requirement |
+|-----------|-------------|
+| RAM | 32 - 64 GB |
+| GPU | 16 - 24 GB VRAM |
+| Models | 14B - 70B (qwen2.5:14b, llama3.1:70b) |
+| Speed | ~30-80 tokens/sec |
+
+### Compatible GPUs
+
+| Vendor | Examples | VRAM | Acceleration |
+|--------|----------|------|--------------|
+| NVIDIA | GTX 1660, RTX 3060, RTX 4090 | 6-24 GB | CUDA |
+| AMD | RX 6700 XT, RX 7900 XTX | 12-24 GB | ROCm |
+| Intel | Arc A750, Arc A770 | 8-16 GB | Vulkan |
+| Apple | M1, M2, M3, M4 | 8-192 GB | Metal |
+
+---
+
 ## Architecture
 
 ```
