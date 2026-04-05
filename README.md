@@ -412,4 +412,4 @@ openchat-local/
 
 MIT License — see [LICENSE](LICENSE).
 
-## Made by Hung Nguyen
+## 🚀 Made by Hung Nguyen 🚀
