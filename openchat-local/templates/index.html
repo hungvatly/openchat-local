@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenChat Local</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;1,9..40,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app">
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L2 19h20L12 2z"/>
+            </svg>
+        </div>
+
+        <button class="sidebar-btn" id="btn-new-chat" title="New Chat">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+
+        <button class="sidebar-btn" id="btn-upload" title="Documents">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </button>
+
+        <button class="sidebar-btn" title="Home" onclick="clearChat()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        </button>
+
+        <div class="sidebar-bottom">
+            <button class="sidebar-btn" id="btn-settings" title="Settings">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+
+            <div class="status-dot" title="Ollama status"></div>
+        </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="main">
+
+        <!-- Welcome screen -->
+        <div class="welcome">
+            <h1>Hi there, <span>User</span></h1>
+            <h2>What would you like to know?</h2>
+            <p>Use one of the prompts below or type your own to begin</p>
+
+            <div class="prompt-cards">
+                <div class="prompt-card">
+                    <div class="prompt-card-text">Summarize the key points from my documents</div>
+                    <svg class="prompt-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                </div>
+                <div class="prompt-card">
+                    <div class="prompt-card-text">Generate an email reply based on my documents</div>
+                    <svg class="prompt-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </div>
+                <div class="prompt-card">
+                    <div class="prompt-card-text">Extract key entities and dates from my files</div>
+                    <svg class="prompt-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </div>
+                <div class="prompt-card">
+                    <div class="prompt-card-text">How does AI work in a technical capacity</div>
+                    <svg class="prompt-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                </div>
+            </div>
+
+            <button class="refresh-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Refresh Prompts
+            </button>
+        </div>
+
+        <!-- Chat messages -->
+        <div class="chat-area"></div>
+
+        <!-- Input area -->
+        <div class="input-area">
+            <div class="input-box">
+                <div class="input-top">
+                    <textarea id="chat-input" placeholder="Ask whatever you want..." rows="1" maxlength="1000"></textarea>
+                    <select class="model-select" id="model-select">
+                        <option>Loading...</option>
+                    </select>
+                </div>
+                <div class="input-bottom">
+                    <div class="input-actions">
+                        <button class="input-action-btn" onclick="openUploadPanel()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                            Add Documents
+                        </button>
+                        <select class="model-select" id="mode-select" style="margin-left:0">
+                            <option value="docs">My Docs</option>
+                            <option value="web">Web Search</option>
+                            <option value="plain">No Context</option>
+                        </select>
+                        <span id="rag-stats" style="font-size:11px;color:var(--text-muted)"></span>
+                    </div>
+                    <div class="input-right">
+                        <span class="char-count">0/1000</span>
+                        <button class="send-btn" id="send-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Upload Panel -->
+<div class="panel-overlay" id="upload-panel">
+    <div class="panel">
+        <h3>Manage Documents</h3>
+
+        <div class="panel-field">
+            <label>Watch folder (auto-indexes new files)</label>
+            <div style="display:flex;gap:8px">
+                <input type="text" id="watch-folder-path" placeholder="/home/user/documents">
+                <button class="btn" onclick="addWatchFolder()" style="white-space:nowrap">Watch</button>
+            </div>
+            <div id="watch-status" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
+            <div id="watch-folders" style="margin-top:6px"></div>
+            <button class="btn btn-outline" onclick="forceScan()" style="margin-top:8px;width:100%">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Scan now
+            </button>
+        </div>
+
+        <div style="border-top:1px solid var(--border);margin:1rem 0;opacity:0.5"></div>
+
+        <div class="panel-field">
+            <label>Upload files (.txt, .pdf, .docx, .md, .csv, .xml)</label>
+            <button class="btn" onclick="uploadFile()" style="width:100%">Choose Files</button>
+        </div>
+
+        <div class="panel-field">
+            <label>Or index a folder once</label>
+            <div style="display:flex;gap:8px">
+                <input type="text" id="folder-path" placeholder="/path/to/your/documents">
+                <button class="btn" onclick="ingestFolder()" style="white-space:nowrap">Index</button>
+            </div>
+        </div>
+
+        <div class="panel-field">
+            <label>Or add a YouTube video</label>
+            <div style="display:flex;gap:8px">
+                <input type="url" id="youtube-url" placeholder="https://youtube.com/watch?v=...">
+                <button class="btn" onclick="ingestYouTube()" style="white-space:nowrap">Add</button>
+            </div>
+        </div>
+
+        <div id="upload-status" style="font-size:13px;color:var(--text-secondary);margin:8px 0"></div>
+        <div class="file-list" id="file-list"></div>
+
+        <div style="display:flex;gap:8px;margin-top:1rem">
+            <button class="btn btn-outline" onclick="clearDocuments()">Clear All</button>
+            <button class="btn" onclick="$('#upload-panel').classList.remove('active')">Done</button>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Panel -->
+<div class="panel-overlay" id="settings-panel">
+    <div class="panel">
+        <h3>Settings</h3>
+
+        <div class="panel-field">
+            <label>Ollama Server URL</label>
+            <input type="text" id="ollama-url" value="http://localhost:11434">
+        </div>
+
+        <div class="panel-field">
+            <label>System Prompt</label>
+            <textarea style="width:100%;min-height:80px;background:var(--bg-primary);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);padding:10px 12px;font-size:14px;font-family:var(--font-main);outline:none;resize:vertical" placeholder="Custom system prompt..."></textarea>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:1rem">
+            <button class="btn" onclick="$('#settings-panel').classList.remove('active')">Save</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+python-multipart
+jinja2
+aiohttp
+chromadb
+sentence-transformers
+pypdf2
+python-docx
+beautifulsoup4
+yt-dlp
+pydantic
+pydantic-settings
+aiofiles
+psutil
