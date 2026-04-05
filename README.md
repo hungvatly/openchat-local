@@ -3,12 +3,6 @@
 > An open-source, cross-platform alternative to NVIDIA's Chat with RTX.
 > Chat privately with your documents, search the web, understand images, dictate with your voice, and generate Word/PDF/Excel files — all running locally on your machine.
 
-![Python](https://img.shields.io/badge/Python-3.10--3.12-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
-![Ollama](https://img.shields.io/badge/Ollama-000000?logo=ollama&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
-
 ---
 
 ## What Is This?
@@ -24,27 +18,6 @@ OpenChat Local is a fully local AI chatbot that can:
 - **Remember conversations** — Full chat history with search, resume, and export
 
 Everything runs on your computer. No cloud. No API keys. No subscriptions.
-
----
-
-## Why Use This Over Chat with RTX?
-
-| Feature | NVIDIA Chat with RTX | OpenChat Local |
-|---------|---------------------|----------------|
-| Operating System | Windows only | **Windows, macOS, Linux** |
-| GPU Required | NVIDIA RTX 30+ (8GB+ VRAM) | **Any GPU or CPU-only** |
-| Minimum VRAM | 8 GB | **0 GB (runs on CPU)** |
-| File Types | txt, pdf, docx, xml | **txt, pdf, docx, md, csv, xml** |
-| YouTube Transcripts | Yes | **Yes** |
-| Web Search | No | **Yes** |
-| Image Understanding | No | **Yes (vision models)** |
-| Voice Input | No | **Yes (Whisper)** |
-| Document Generation | No | **Yes (Word, PDF, Excel)** |
-| Chat History | No | **Yes (SQLite, export)** |
-| Watch Folder | No | **Yes (auto-index)** |
-| Choose Any Model | Limited | **Any Ollama model** |
-| Open Source | Partial | **Fully open source (MIT)** |
-| Install Size | ~40 GB | **~2 GB + model** |
 
 ---
 
@@ -395,3 +368,5 @@ openchat-local/
 ## License
 
 MIT License — see [LICENSE](LICENSE).
+
+## Made by Hung Nguyen
