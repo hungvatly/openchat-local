@@ -5,9 +5,10 @@ A cross-platform, open-source local RAG chatbot.
 import os
 import uuid
 import json
+import base64
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, Request
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -17,9 +18,14 @@ from utils.rag_engine import rag_engine
 from utils.document_loader import load_youtube_transcript
 from utils.web_search import web_search
 from utils.folder_watcher import folder_watcher
+from utils.chat_history import chat_history
+from utils.doc_generator import detect_and_generate, generate_docx, generate_pdf, generate_xlsx
+from utils.voice_input import transcribe_audio, is_available as whisper_available
 
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+os.makedirs("data/generated", exist_ok=True)
+app.mount("/files", StaticFiles(directory="data/generated"), name="files")
 templates = Jinja2Templates(directory="templates")
 
 
@@ -45,6 +51,8 @@ async def health():
         "recommended_models": ACTIVE_PROFILE["recommended_models"],
         "web_search_enabled": settings.WEB_SEARCH_ENABLED,
         "searxng_configured": bool(settings.SEARXNG_URL),
+        "voice_available": whisper_available(),
+        "doc_generation": True,
     }
 
 
@@ -61,11 +69,21 @@ async def chat(request: Request):
     body = await request.json()
     message = body.get("message", "")
     model = body.get("model", None)
-    mode = body.get("mode", "docs")  # "docs" (RAG), "web", or "plain"
+    mode = body.get("mode", "docs")
     history = body.get("history", [])
+    conv_id = body.get("conversation_id", None)
+    images_b64 = body.get("images", [])  # list of base64 image strings
 
     if not message.strip():
         return JSONResponse({"error": "Empty message"}, status_code=400)
+
+    # Create or reuse conversation
+    if not conv_id:
+        conv_id = uuid.uuid4().hex[:12]
+        chat_history.create_conversation(conv_id, model=model or settings.DEFAULT_MODEL)
+
+    # Save user message
+    chat_history.add_message(conv_id, "user", message, images=",".join(images_b64[:1]) if images_b64 else "")
 
     context = ""
     sources = []
@@ -87,19 +105,39 @@ async def chat(request: Request):
                 else:
                     web_context_parts.append(f"[Source: {r['title']}]\nURL: {r['url']}\n{r['snippet']}")
                 sources.append({"source": r["title"], "url": r["url"], "type": "web"})
-
             context = "\n\n---\n\n".join(web_context_parts)
 
     async def generate():
+        full_text = ""
         async for token in ollama_client.stream_chat(
             message=message,
             model=model,
             context=context,
             history=history,
+            images=images_b64 if images_b64 else None,
         ):
+            full_text += token
             yield f"data: {json.dumps({'token': token})}\n\n"
 
-        yield f"data: {json.dumps({'done': True, 'sources': sources})}\n\n"
+        # Save AI response
+        chat_history.add_message(conv_id, "assistant", full_text, sources=sources)
+
+        # Auto-generate title for new conversations
+        if len(history) == 0:
+            title = message[:50].strip()
+            chat_history.update_title(conv_id, title)
+
+        # Check if user asked to create a document
+        doc_result = detect_and_generate(full_text, message)
+        file_info = None
+        if doc_result and doc_result.get("status") == "ok":
+            file_info = {
+                "filename": doc_result["filename"],
+                "url": f"/files/{doc_result['filename']}",
+                "type": doc_result["type"],
+            }
+
+        yield f"data: {json.dumps({'done': True, 'sources': sources, 'conversation_id': conv_id, 'file': file_info})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -216,9 +254,112 @@ async def watcher_remove(request: Request):
 
 @app.post("/api/watcher/scan")
 async def watcher_scan_now():
-    """Trigger an immediate scan."""
     result = folder_watcher.scan_and_index()
     return result
+
+
+# ── API: Chat History ─────────────────────────────────
+
+@app.get("/api/conversations")
+async def list_conversations():
+    convs = chat_history.list_conversations(limit=50)
+    return {"conversations": convs}
+
+
+@app.get("/api/conversations/{conv_id}")
+async def get_conversation(conv_id: str):
+    conv = chat_history.get_conversation(conv_id)
+    if not conv:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return conv
+
+
+@app.delete("/api/conversations/{conv_id}")
+async def delete_conversation(conv_id: str):
+    chat_history.delete_conversation(conv_id)
+    return {"status": "ok"}
+
+
+@app.get("/api/conversations/{conv_id}/export")
+async def export_conversation(conv_id: str, format: str = "md"):
+    if format == "md":
+        md = chat_history.export_markdown(conv_id)
+        if not md:
+            return JSONResponse({"error": "Not found"}, status_code=404)
+        return JSONResponse({"markdown": md, "conversation_id": conv_id})
+    elif format == "pdf":
+        md = chat_history.export_markdown(conv_id)
+        if not md:
+            return JSONResponse({"error": "Not found"}, status_code=404)
+        conv = chat_history.get_conversation(conv_id)
+        result = generate_pdf(conv["title"], md)
+        if result.get("status") == "ok":
+            return FileResponse(result["path"], filename=result["filename"], media_type="application/pdf")
+        return JSONResponse(result, status_code=500)
+    return JSONResponse({"error": "Unsupported format. Use 'md' or 'pdf'"}, status_code=400)
+
+
+# ── API: Document Generation ──────────────────────────
+
+@app.post("/api/generate/docx")
+async def gen_docx(request: Request):
+    body = await request.json()
+    result = generate_docx(body.get("title", "Document"), body.get("content", ""))
+    if result.get("status") == "ok":
+        result["url"] = f"/files/{result['filename']}"
+    return result
+
+
+@app.post("/api/generate/pdf")
+async def gen_pdf(request: Request):
+    body = await request.json()
+    result = generate_pdf(body.get("title", "Document"), body.get("content", ""))
+    if result.get("status") == "ok":
+        result["url"] = f"/files/{result['filename']}"
+    return result
+
+
+@app.post("/api/generate/xlsx")
+async def gen_xlsx(request: Request):
+    body = await request.json()
+    result = generate_xlsx(body.get("title", "Spreadsheet"), body.get("content", ""))
+    if result.get("status") == "ok":
+        result["url"] = f"/files/{result['filename']}"
+    return result
+
+
+# ── API: Image Upload (for vision models) ─────────────
+
+@app.post("/api/upload/image")
+async def upload_image(file: UploadFile = File(...)):
+    allowed = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed:
+        return JSONResponse({"error": f"Unsupported image type: {ext}"}, status_code=400)
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        return JSONResponse({"error": "Image too large. Max 10MB"}, status_code=400)
+
+    b64 = base64.b64encode(content).decode("utf-8")
+    return {"status": "ok", "base64": b64, "filename": file.filename, "size": len(content)}
+
+
+# ── API: Voice Input ──────────────────────────────────
+
+@app.post("/api/voice/transcribe")
+async def voice_transcribe(file: UploadFile = File(...)):
+    content = await file.read()
+    if len(content) > 25 * 1024 * 1024:
+        return JSONResponse({"error": "Audio too large. Max 25MB"}, status_code=400)
+
+    result = transcribe_audio(content, file.filename)
+    return result
+
+
+@app.get("/api/voice/status")
+async def voice_status():
+    return {"available": whisper_available()}
 
 
 # ── Startup ────────────────────────────────────────────

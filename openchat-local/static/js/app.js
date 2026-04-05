@@ -6,11 +6,15 @@ const state = {
     messages: [],
     model: null,
     models: [],
-    mode: "docs",  // "docs" | "web" | "plain"
+    mode: "docs",
     isStreaming: false,
     uploadedFiles: [],
     profile: "medium",
     recommendedModels: [],
+    conversationId: null,
+    pendingImages: [],  // base64 images for vision
+    isRecording: false,
+    mediaRecorder: null,
 };
 
 // ── DOM refs ───────────────────────
@@ -32,6 +36,7 @@ const modeSelect = $("#mode-select");
 async function init() {
     await checkHealth();
     await loadModels();
+    await loadConversations();
     setupListeners();
     textareaEl.focus();
 }
@@ -139,19 +144,24 @@ async function sendMessage() {
     state.isStreaming = true;
     sendBtn.disabled = true;
 
-    // Show chat area, hide welcome
     welcomeEl.classList.add("hidden");
     chatAreaEl.classList.add("active");
 
-    // Add user message
-    appendMessage("user", text);
+    // Show image previews if attached
+    if (state.pendingImages.length > 0) {
+        const imgPreview = document.createElement("div");
+        imgPreview.className = "message message-user";
+        imgPreview.innerHTML = `<div class="message-content"><img src="data:image/jpeg;base64,${state.pendingImages[0]}" style="max-width:200px;border-radius:8px;margin-bottom:4px"><br>${escapeHtml(text)}</div>`;
+        chatAreaEl.appendChild(imgPreview);
+    } else {
+        appendMessage("user", text);
+    }
     state.messages.push({ role: "user", content: text });
 
     textareaEl.value = "";
     textareaEl.style.height = "auto";
     charCount.textContent = "0/1000";
 
-    // Create AI message placeholder
     const aiMsgEl = appendMessage("ai", "");
     const contentEl = aiMsgEl.querySelector(".message-content");
     contentEl.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
@@ -165,6 +175,8 @@ async function sendMessage() {
                 model: state.model,
                 mode: state.mode,
                 history: state.messages.slice(-10),
+                conversation_id: state.conversationId,
+                images: state.pendingImages,
             }),
         });
 
@@ -172,6 +184,7 @@ async function sendMessage() {
         const decoder = new TextDecoder();
         let fullText = "";
         let sources = [];
+        let fileInfo = null;
 
         contentEl.innerHTML = "";
 
@@ -193,12 +206,16 @@ async function sendMessage() {
                     }
                     if (data.done) {
                         sources = data.sources || [];
+                        if (data.conversation_id) {
+                            state.conversationId = data.conversation_id;
+                        }
+                        fileInfo = data.file || null;
                     }
                 } catch {}
             }
         }
 
-        // Add sources if available
+        // Show sources
         if (sources.length > 0) {
             const srcDiv = document.createElement("div");
             srcDiv.className = "sources";
@@ -224,7 +241,18 @@ async function sendMessage() {
             aiMsgEl.appendChild(srcDiv);
         }
 
+        // Show download link if a file was generated
+        if (fileInfo) {
+            const dlDiv = document.createElement("div");
+            dlDiv.style.cssText = "margin-top:10px";
+            dlDiv.innerHTML = `<a href="${fileInfo.url}" download="${fileInfo.filename}" class="source-tag source-link" style="padding:6px 14px;font-size:13px">Download ${fileInfo.filename}</a>`;
+            aiMsgEl.appendChild(dlDiv);
+        }
+
         state.messages.push({ role: "assistant", content: fullText });
+        state.pendingImages = [];
+        clearImagePreview();
+        loadConversations();
     } catch (err) {
         contentEl.innerHTML = `<p style="color:var(--error)">Error: ${err.message}. Is Ollama running?</p>`;
     }
@@ -245,9 +273,12 @@ function appendMessage(role, text) {
 
 function clearChat() {
     state.messages = [];
+    state.conversationId = null;
+    state.pendingImages = [];
     chatAreaEl.innerHTML = "";
     chatAreaEl.classList.remove("active");
     welcomeEl.classList.remove("hidden");
+    clearImagePreview();
     textareaEl.focus();
 }
 
@@ -556,6 +587,187 @@ async function loadWatcherStatus() {
 
 function openSettingsPanel() {
     $("#settings-panel").classList.add("active");
+}
+
+// ── Conversation History ──────────
+
+async function loadConversations() {
+    try {
+        const res = await fetch("/api/conversations");
+        const data = await res.json();
+        const list = $("#conversation-list");
+        if (!list) return;
+
+        list.innerHTML = "";
+        (data.conversations || []).forEach((c) => {
+            const item = document.createElement("div");
+            item.className = "conv-item" + (c.id === state.conversationId ? " active" : "");
+            item.innerHTML = `
+                <span class="conv-title" onclick="loadConversation('${c.id}')">${escapeHtml(c.title)}</span>
+                <button class="conv-delete" onclick="event.stopPropagation();deleteConversation('${c.id}')">x</button>
+            `;
+            list.appendChild(item);
+        });
+    } catch {}
+}
+
+async function loadConversation(convId) {
+    try {
+        const res = await fetch(`/api/conversations/${convId}`);
+        const conv = await res.json();
+        if (!conv || !conv.messages) return;
+
+        state.conversationId = convId;
+        state.messages = [];
+        chatAreaEl.innerHTML = "";
+        welcomeEl.classList.add("hidden");
+        chatAreaEl.classList.add("active");
+
+        conv.messages.forEach((m) => {
+            appendMessage(m.role === "user" ? "user" : "ai", m.content);
+            state.messages.push({ role: m.role, content: m.content });
+        });
+
+        chatAreaEl.scrollTop = chatAreaEl.scrollHeight;
+        loadConversations();
+    } catch {}
+}
+
+async function deleteConversation(convId) {
+    await fetch(`/api/conversations/${convId}`, { method: "DELETE" });
+    if (state.conversationId === convId) clearChat();
+    loadConversations();
+}
+
+async function exportConversation(format) {
+    if (!state.conversationId) return;
+    if (format === "md") {
+        const res = await fetch(`/api/conversations/${state.conversationId}/export?format=md`);
+        const data = await res.json();
+        if (data.markdown) {
+            const blob = new Blob([data.markdown], { type: "text/markdown" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `chat_${state.conversationId}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    } else if (format === "pdf") {
+        window.open(`/api/conversations/${state.conversationId}/export?format=pdf`, "_blank");
+    }
+}
+
+// ── Image Upload (Vision) ─────────
+
+async function attachImage() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+
+    input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await fetch("/api/upload/image", { method: "POST", body: formData });
+            const data = await res.json();
+            if (data.status === "ok") {
+                state.pendingImages = [data.base64];
+                showImagePreview(data.base64, data.filename);
+            }
+        } catch (err) {
+            console.error("Image upload failed:", err);
+        }
+    };
+    input.click();
+}
+
+function showImagePreview(b64, filename) {
+    let preview = $("#image-preview");
+    if (!preview) {
+        preview = document.createElement("div");
+        preview.id = "image-preview";
+        preview.style.cssText = "padding:4px 16px;display:flex;align-items:center;gap:8px";
+        $(".input-box").prepend(preview);
+    }
+    preview.innerHTML = `
+        <img src="data:image/jpeg;base64,${b64}" style="height:40px;border-radius:6px;border:1px solid var(--border)">
+        <span style="font-size:12px;color:var(--text-muted)">${filename}</span>
+        <button onclick="clearImagePreview()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px">x</button>
+    `;
+}
+
+function clearImagePreview() {
+    state.pendingImages = [];
+    const preview = $("#image-preview");
+    if (preview) preview.remove();
+}
+
+// ── Voice Input ───────────────────
+
+async function toggleVoice() {
+    if (state.isRecording) {
+        stopRecording();
+    } else {
+        startRecording();
+    }
+}
+
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const chunks = [];
+        const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+        recorder.ondataavailable = (e) => chunks.push(e.data);
+        recorder.onstop = async () => {
+            stream.getTracks().forEach((t) => t.stop());
+            const blob = new Blob(chunks, { type: "audio/webm" });
+
+            const voiceBtn = $("#voice-btn");
+            if (voiceBtn) voiceBtn.textContent = "...";
+
+            const formData = new FormData();
+            formData.append("file", blob, "recording.webm");
+
+            try {
+                const res = await fetch("/api/voice/transcribe", { method: "POST", body: formData });
+                const data = await res.json();
+                if (data.status === "ok" && data.text) {
+                    textareaEl.value = data.text;
+                    textareaEl.dispatchEvent(new Event("input"));
+                }
+            } catch (err) {
+                console.error("Transcription failed:", err);
+            }
+
+            if (voiceBtn) {
+                voiceBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>';
+            }
+        };
+
+        recorder.start();
+        state.mediaRecorder = recorder;
+        state.isRecording = true;
+
+        const voiceBtn = $("#voice-btn");
+        if (voiceBtn) {
+            voiceBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="2"><rect x="6" y="4" width="12" height="16" rx="2"/></svg>';
+        }
+    } catch (err) {
+        console.error("Microphone access denied:", err);
+    }
+}
+
+function stopRecording() {
+    if (state.mediaRecorder && state.isRecording) {
+        state.mediaRecorder.stop();
+        state.isRecording = false;
+    }
 }
 
 // ── Boot ───────────────────────────

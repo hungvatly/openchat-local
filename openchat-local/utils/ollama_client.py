@@ -58,8 +58,9 @@ class OllamaClient:
         model: str = None,
         context: str = "",
         history: List[Dict] = None,
+        images: List[str] = None,
     ) -> AsyncGenerator[str, None]:
-        """Stream a chat completion from Ollama."""
+        """Stream a chat completion from Ollama. images = list of base64 strings."""
         model = model or settings.DEFAULT_MODEL
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
@@ -75,7 +76,10 @@ class OllamaClient:
                 f"Question: {message}"
             )
 
-        messages.append({"role": "user", "content": user_content})
+        user_msg = {"role": "user", "content": user_content}
+        if images:
+            user_msg["images"] = images
+        messages.append(user_msg)
 
         payload = {
             "model": model,
