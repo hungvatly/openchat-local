@@ -49,36 +49,6 @@ It connects to [Ollama](https://ollama.com/) for local LLM inference, and wraps 
 
 ---
 
-## Comparison with Chat with RTX
-
-| Feature | NVIDIA Chat with RTX | OpenChat Local |
-|---------|---------------------|----------------|
-| Operating system | Windows only | **Windows, macOS, Linux** |
-| GPU required | NVIDIA RTX 30+ (8GB VRAM) | **Any GPU or CPU-only** |
-| Minimum VRAM | 8 GB | **0 GB (CPU mode)** |
-| Document types | txt, pdf, docx, xml | **txt, pdf, docx, md, csv, xml** |
-| Scanned PDF (OCR) | No | **Yes (Tesseract)** |
-| YouTube transcripts | Yes | **Yes** |
-| Web search | No | **Yes (DuckDuckGo + SearXNG)** |
-| Image understanding | No | **Yes (vision models)** |
-| Voice input | No | **Yes (Whisper)** |
-| Text-to-speech | No | **Yes (browser TTS)** |
-| Document generation | No | **Yes (Word, PDF, Excel)** |
-| Template form filling | No | **Yes** |
-| Chat history | No | **Yes (SQLite, search, export)** |
-| AI personas | No | **Yes (7 built-in + custom)** |
-| Conversation folders | No | **Yes** |
-| Conversation search | No | **Yes (full-text)** |
-| Code highlighting | No | **Yes (highlight.js + copy)** |
-| Math rendering | No | **Yes (KaTeX LaTeX)** |
-| Diagram rendering | No | **Yes (Mermaid)** |
-| Watch folder (auto-index) | No | **Yes** |
-| Choose any model | Limited | **Any Ollama model** |
-| Open source | Partial | **Fully open source (MIT)** |
-| Install size | ~40 GB | **~2 GB + model** |
-
----
-
 ## Features
 
 ### Chat & AI
