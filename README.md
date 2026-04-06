@@ -85,8 +85,8 @@ Everything runs on your computer. No cloud. No API keys. No subscriptions.
 
 ```
 ┌────────────────┐     ┌────────────────┐     ┌────────────────┐
-│    Browser     │────▶│    FastAPI     │────▶│     Ollama     │
-│  (Dark UI)     │◀────│    Server      │◀────│   (LLM Host)   │
+│   Browser UI   │────▶│    FastAPI     │────▶│     Ollama     │
+│                │◀────│    Server      │◀────│   (LLM Host)   │
 └────────────────┘     └───────┬────────┘     └────────────────┘
                                │
               ┌────────────────┼────────────────┐
