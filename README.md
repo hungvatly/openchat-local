@@ -374,3 +374,5 @@ openchat-local/
 ## License
 
 MIT License — see [LICENSE](LICENSE).
+
+## Made by Hung Nguyen
