@@ -27,27 +27,6 @@ Everything runs on your computer. No cloud. No API keys. No subscriptions.
 
 ---
 
-## Why Use This Over Chat with RTX?
-
-| Feature | NVIDIA Chat with RTX | OpenChat Local |
-|---------|---------------------|----------------|
-| Operating System | Windows only | **Windows, macOS, Linux** |
-| GPU Required | NVIDIA RTX 30+ (8GB+ VRAM) | **Any GPU or CPU-only** |
-| Minimum VRAM | 8 GB | **0 GB (runs on CPU)** |
-| File Types | txt, pdf, docx, xml | **txt, pdf, docx, md, csv, xml** |
-| YouTube Transcripts | Yes | **Yes** |
-| Web Search | No | **Yes** |
-| Image Understanding | No | **Yes (vision models)** |
-| Voice Input | No | **Yes (Whisper)** |
-| Document Generation | No | **Yes (Word, PDF, Excel)** |
-| Chat History | No | **Yes (SQLite, export)** |
-| Watch Folder | No | **Yes (auto-index)** |
-| Choose Any Model | Limited | **Any Ollama model** |
-| Open Source | Partial | **Fully open source (MIT)** |
-| Install Size | ~40 GB | **~2 GB + model** |
-
----
-
 ## Features
 
 ### Core Chat
