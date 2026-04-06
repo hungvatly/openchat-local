@@ -15,6 +15,8 @@ const state = {
     pendingImages: [],  // base64 images for vision
     isRecording: false,
     mediaRecorder: null,
+    personaId: "default",
+    ttsEnabled: false,
 };
 
 // ── DOM refs ───────────────────────
@@ -34,9 +36,28 @@ const modeSelect = $("#mode-select");
 // ── Init ───────────────────────────
 
 async function init() {
+    // Configure marked.js for rich rendering
+    if (typeof marked !== 'undefined') {
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
+                }
+                return typeof hljs !== 'undefined' ? hljs.highlightAuto(code).value : code;
+            },
+            breaks: true,
+            gfm: true,
+        });
+    }
+    if (typeof mermaid !== 'undefined') {
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    }
+
     await checkHealth();
     await loadModels();
+    await loadPersonas();
     await loadConversations();
+    await loadFolders();
     setupListeners();
     textareaEl.focus();
 }
@@ -181,6 +202,7 @@ async function sendMessage() {
                 history: state.messages.slice(-10),
                 conversation_id: state.conversationId,
                 images: state.pendingImages,
+                persona_id: state.personaId,
             }),
         });
 
@@ -256,6 +278,8 @@ async function sendMessage() {
         state.messages.push({ role: "assistant", content: fullText });
         state.pendingImages = [];
         clearImagePreview();
+        postRenderEnhance();
+        if (state.ttsEnabled && fullText) speakText(fullText);
         loadConversations();
     } catch (err) {
         contentEl.innerHTML = `<p style="color:var(--error)">Error: ${err.message}. Is Ollama running?</p>`;
@@ -286,49 +310,52 @@ function clearChat() {
     textareaEl.focus();
 }
 
-// ── Markdown (minimal) ─────────────
+// ── Markdown (rich rendering) ─────
 
 function renderMarkdown(text) {
     if (!text) return "";
+
+    // Use marked.js if available
+    if (typeof marked !== 'undefined') {
+        try {
+            // Custom renderer for code blocks with copy button
+            const renderer = new marked.Renderer();
+            const origCode = renderer.code;
+            renderer.code = function(code, lang) {
+                // Mermaid diagrams
+                if (lang === 'mermaid') {
+                    return `<div class="mermaid">${escapeHtml(typeof code === 'object' ? code.text || '' : code)}</div>`;
+                }
+                const codeText = typeof code === 'object' ? code.text || '' : code;
+                const codeLang = typeof code === 'object' ? code.lang || '' : (lang || '');
+                let highlighted = escapeHtml(codeText);
+                if (typeof hljs !== 'undefined') {
+                    try {
+                        highlighted = codeLang && hljs.getLanguage(codeLang)
+                            ? hljs.highlight(codeText, { language: codeLang }).value
+                            : hljs.highlightAuto(codeText).value;
+                    } catch(e) {}
+                }
+                const langLabel = codeLang ? `<span class="code-lang">${codeLang}</span>` : '';
+                return `<div class="code-block">${langLabel}<button class="code-copy-btn" onclick="copyCode(this)">Copy</button><pre><code class="hljs language-${codeLang}">${highlighted}</code></pre></div>`;
+            };
+
+            return marked.parse(text, { renderer: renderer, breaks: true, gfm: true });
+        } catch(e) {
+            console.error('marked.js error:', e);
+        }
+    }
+
+    // Fallback: basic markdown
     let html = escapeHtml(text);
-
-    // Code blocks
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-        return `<pre><code class="language-${lang}">${code.trim()}</code></pre>`;
-    });
-
-    // Inline code
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code.trim()}</code></pre>`);
     html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
-
-    // Bold
     html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-
-    // Italic
     html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
-
-    // Headers
     html = html.replace(/^### (.+)$/gm, "<h4>$1</h4>");
     html = html.replace(/^## (.+)$/gm, "<h3>$1</h3>");
     html = html.replace(/^# (.+)$/gm, "<h2>$1</h2>");
-
-    // Lists
-    html = html.replace(/^- (.+)$/gm, "<li>$1</li>");
-    html = html.replace(/(<li>.*<\/li>)/gs, "<ul>$1</ul>");
-
-    // Paragraphs
-    html = html
-        .split("\n\n")
-        .map((p) => {
-            p = p.trim();
-            if (!p) return "";
-            if (p.startsWith("<")) return p;
-            return `<p>${p}</p>`;
-        })
-        .join("");
-
-    // Clean up single newlines within paragraphs
-    html = html.replace(/(?<!>)\n(?!<)/g, "<br>");
-
+    html = html.split("\n\n").map(p => { p=p.trim(); if(!p) return ""; if(p.startsWith("<")) return p; return `<p>${p}</p>`; }).join("");
     return html;
 }
 
@@ -336,6 +363,45 @@ function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
+}
+
+function copyCode(btn) {
+    const code = btn.closest('.code-block').querySelector('code');
+    navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 1500);
+    });
+}
+
+function postRenderEnhance() {
+    // Render mermaid diagrams
+    if (typeof mermaid !== 'undefined') {
+        try {
+            document.querySelectorAll('.mermaid:not([data-processed])').forEach(el => {
+                el.setAttribute('data-processed', 'true');
+                const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+                mermaid.render(id, el.textContent).then(({svg}) => {
+                    el.innerHTML = svg;
+                }).catch(() => {});
+            });
+        } catch(e) {}
+    }
+
+    // Render KaTeX math: $...$ and $$...$$
+    if (typeof katex !== 'undefined') {
+        document.querySelectorAll('.message-ai .message-content').forEach(el => {
+            // Block math: $$...$$
+            el.innerHTML = el.innerHTML.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
+                try { return katex.renderToString(tex.trim(), { displayMode: true }); }
+                catch(e) { return `<code>${tex}</code>`; }
+            });
+            // Inline math: $...$
+            el.innerHTML = el.innerHTML.replace(/\$([^\$\n]+?)\$/g, (_, tex) => {
+                try { return katex.renderToString(tex.trim(), { displayMode: false }); }
+                catch(e) { return `<code>${tex}</code>`; }
+            });
+        });
+    }
 }
 
 // ── Prompt cards ───────────────────
@@ -595,9 +661,11 @@ function openSettingsPanel() {
 
 // ── Conversation History ──────────
 
-async function loadConversations() {
+async function loadConversations(folderFilter) {
     try {
-        const res = await fetch("/api/conversations");
+        let url = "/api/conversations";
+        if (folderFilter) url += `?folder=${encodeURIComponent(folderFilter)}`;
+        const res = await fetch(url);
         const data = await res.json();
         const container = $("#sidebar-sessions");
         if (!container) return;
@@ -634,11 +702,16 @@ async function loadConversations() {
                 lastGroup = group;
             }
 
+            const folderBadge = c.folder ? `<span style="font-size:10px;color:var(--text-muted);background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;margin-left:4px">${escapeHtml(c.folder)}</span>` : '';
+
             const item = document.createElement("div");
             item.className = "session-item" + (c.id === state.conversationId ? " active" : "");
             item.innerHTML = `
-                <span class="session-title" onclick="loadConversation('${c.id}')">${escapeHtml(c.title || 'New Chat')}</span>
+                <span class="session-title" onclick="loadConversation('${c.id}')">${escapeHtml(c.title || 'New Chat')}${folderBadge}</span>
                 <div class="session-actions">
+                    <button class="session-action-btn" onclick="event.stopPropagation();setFolder('${c.id}')" title="Set folder">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    </button>
                     <button class="session-action-btn" onclick="event.stopPropagation();renameSession('${c.id}', this)" title="Rename">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
@@ -649,21 +722,6 @@ async function loadConversations() {
             `;
             container.appendChild(item);
         });
-
-        // Update history panel too if open
-        const historyList = $("#conversation-list");
-        if (historyList) {
-            historyList.innerHTML = "";
-            convs.forEach((c) => {
-                const item = document.createElement("div");
-                item.className = "conv-item" + (c.id === state.conversationId ? " active" : "");
-                item.innerHTML = `
-                    <span class="conv-title" onclick="loadConversation('${c.id}')">${escapeHtml(c.title || 'New Chat')}</span>
-                    <button class="conv-delete" onclick="event.stopPropagation();deleteConversation('${c.id}')">x</button>
-                `;
-                historyList.appendChild(item);
-            });
-        }
     } catch {}
 }
 
@@ -969,6 +1027,168 @@ async function fillTemplate(format) {
     } catch (err) {
         statusEl.textContent = `Error: ${err.message}`;
     }
+}
+
+// ── Personas ──────────────────────
+
+async function loadPersonas() {
+    try {
+        const res = await fetch("/api/personas");
+        const data = await res.json();
+        const select = $("#persona-select");
+        if (!select) return;
+
+        select.innerHTML = "";
+        (data.personas || []).forEach((p) => {
+            const opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = p.name;
+            if (p.id === state.personaId) opt.selected = true;
+            select.appendChild(opt);
+        });
+
+        select.addEventListener("change", (e) => {
+            state.personaId = e.target.value;
+        });
+    } catch {}
+}
+
+// ── Search ────────────────────────
+
+let searchTimeout = null;
+async function searchConversations(query) {
+    clearTimeout(searchTimeout);
+    if (!query || query.length < 2) {
+        loadConversations();
+        return;
+    }
+    searchTimeout = setTimeout(async () => {
+        try {
+            const res = await fetch(`/api/conversations/search/${encodeURIComponent(query)}`);
+            const data = await res.json();
+            const container = $("#sidebar-sessions");
+            if (!container) return;
+
+            container.innerHTML = "";
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<div style="padding:12px 6px;font-size:12px;color:var(--text-muted)">No results found</div>';
+                return;
+            }
+
+            const label = document.createElement("div");
+            label.className = "sidebar-label";
+            label.textContent = `${data.results.length} results`;
+            container.appendChild(label);
+
+            const seen = new Set();
+            data.results.forEach((r) => {
+                if (seen.has(r.conversation_id)) return;
+                seen.add(r.conversation_id);
+                const item = document.createElement("div");
+                item.className = "session-item";
+                item.innerHTML = `
+                    <span class="session-title" onclick="loadConversation('${r.conversation_id}')">
+                        ${escapeHtml(r.conversation_title || 'Chat')}
+                        <span style="display:block;font-size:11px;color:var(--text-muted);margin-top:2px">${escapeHtml(r.content)}</span>
+                    </span>
+                `;
+                container.appendChild(item);
+            });
+        } catch {}
+    }, 300);
+}
+
+// ── Folders / Tags ────────────────
+
+async function loadFolders() {
+    try {
+        const res = await fetch("/api/folders");
+        const data = await res.json();
+        const select = $("#folder-filter");
+        if (!select) return;
+
+        // Keep "All folders" option
+        select.innerHTML = '<option value="">All folders</option>';
+        (data.folders || []).forEach((f) => {
+            const opt = document.createElement("option");
+            opt.value = f;
+            opt.textContent = f;
+            select.appendChild(opt);
+        });
+    } catch {}
+}
+
+function filterByFolder(folder) {
+    loadConversations(folder);
+}
+
+async function setFolder(convId) {
+    const folder = prompt("Enter folder name (or leave empty to remove):", "");
+    if (folder === null) return;
+    try {
+        await fetch(`/api/conversations/${convId}/meta`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ folder: folder }),
+        });
+        loadConversations();
+        loadFolders();
+    } catch {}
+}
+
+async function setTags(convId) {
+    const tags = prompt("Enter tags separated by commas:", "");
+    if (tags === null) return;
+    try {
+        await fetch(`/api/conversations/${convId}/meta`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tags: tags }),
+        });
+        loadConversations();
+    } catch {}
+}
+
+// ── Text-to-Speech ────────────────
+
+function toggleTTS() {
+    state.ttsEnabled = !state.ttsEnabled;
+    const btn = $("#tts-btn");
+    if (btn) {
+        btn.style.background = state.ttsEnabled ? "var(--bg-tertiary)" : "transparent";
+        btn.title = state.ttsEnabled ? "TTS On (click to turn off)" : "Read aloud";
+    }
+    if (!state.ttsEnabled) {
+        window.speechSynthesis.cancel();
+    }
+}
+
+function speakText(text) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+
+    // Clean markdown/code for speech
+    let clean = text
+        .replace(/```[\s\S]*?```/g, ' (code block) ')
+        .replace(/`[^`]+`/g, '')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/^#+\s*/gm, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/[|_\-]{3,}/g, '')
+        .trim();
+
+    if (!clean) return;
+
+    // Split into chunks (speechSynthesis has a ~200 char limit in some browsers)
+    const chunks = clean.match(/[^.!?\n]{1,200}[.!?\n]?/g) || [clean];
+
+    chunks.forEach((chunk, i) => {
+        const utterance = new SpeechSynthesisUtterance(chunk.trim());
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+    });
 }
 
 // ── Boot ───────────────────────────

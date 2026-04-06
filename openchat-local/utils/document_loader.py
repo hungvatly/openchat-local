@@ -29,7 +29,7 @@ def load_txt(filepath: str) -> str:
 
 
 def load_pdf(filepath: str) -> str:
-    # Try pymupdf first (handles most PDFs)
+    # Try pymupdf first
     try:
         import fitz
         doc = fitz.open(filepath)
@@ -40,7 +40,7 @@ def load_pdf(filepath: str) -> str:
         if text.strip():
             return text
 
-        # No text found — scanned PDF, try OCR
+        # No text — scanned PDF, try OCR
         try:
             import pytesseract
             from PIL import Image

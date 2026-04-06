@@ -7,6 +7,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;1,9..40,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- Markdown Rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+    <!-- Math (KaTeX) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+    <!-- Mermaid Diagrams -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -29,6 +39,18 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span>New Chat</span>
         </button>
+
+        <!-- Search -->
+        <div style="padding:0 10px 4px">
+            <input type="text" id="sidebar-search" placeholder="Search conversations..." style="width:100%;background:var(--bg-primary);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text-primary);padding:6px 10px;font-size:12px;font-family:var(--font-main);outline:none" oninput="searchConversations(this.value)">
+        </div>
+
+        <!-- Folder filter -->
+        <div style="padding:0 10px 4px">
+            <select id="folder-filter" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text-secondary);padding:4px 8px;font-size:12px;font-family:var(--font-main);outline:none" onchange="filterByFolder(this.value)">
+                <option value="">All folders</option>
+            </select>
+        </div>
 
         <div class="sidebar-sessions" id="sidebar-sessions"></div>
 
@@ -116,7 +138,13 @@
                         <span id="rag-stats" style="font-size:11px;color:var(--text-muted)"></span>
                     </div>
                     <div class="input-right">
+                        <select class="model-select" id="persona-select" title="Persona" style="max-width:110px">
+                            <option value="default">Default</option>
+                        </select>
                         <span class="char-count">0/1000</span>
+                        <button class="send-btn" id="tts-btn" onclick="toggleTTS()" title="Read aloud" style="border-color:var(--border)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                        </button>
                         <button class="send-btn" id="send-btn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                         </button>

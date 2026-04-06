@@ -823,3 +823,93 @@ html, body {
 
 .conv-item:hover .conv-delete { opacity: 1; }
 .conv-delete:hover { color: var(--error); }
+
+/* ── Code Blocks ───────────────── */
+
+.code-block {
+    position: relative;
+    margin: 0.75rem 0;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.code-block pre {
+    margin: 0;
+    padding: 14px 16px;
+    overflow-x: auto;
+    background: var(--bg-secondary);
+    border: none;
+}
+
+.code-lang {
+    position: absolute;
+    top: 6px;
+    left: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.code-copy-btn {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-main);
+    transition: all var(--transition);
+}
+
+.code-copy-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-light);
+}
+
+/* ── Mermaid ───────────────────── */
+
+.mermaid {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    margin: 0.75rem 0;
+    text-align: center;
+}
+
+.mermaid svg {
+    max-width: 100%;
+}
+
+/* ── KaTeX Math ────────────────── */
+
+.katex-display {
+    margin: 0.75rem 0;
+    overflow-x: auto;
+}
+
+/* ── Markdown tables ───────────── */
+
+.message-ai .message-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.75rem 0;
+    font-size: 13px;
+}
+
+.message-ai .message-content th,
+.message-ai .message-content td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+}
+
+.message-ai .message-content th {
+    background: var(--bg-tertiary);
+    font-weight: 500;
+}

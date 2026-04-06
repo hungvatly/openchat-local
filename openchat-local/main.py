@@ -77,14 +77,21 @@ async def chat(request: Request):
     history = body.get("history", [])
     conv_id = body.get("conversation_id", None)
     images_b64 = body.get("images", [])  # list of base64 image strings
+    persona_id = body.get("persona_id", "default")
 
     if not message.strip():
         return JSONResponse({"error": "Empty message"}, status_code=400)
 
+    # Resolve persona system prompt
+    system_prompt = None
+    persona = chat_history.get_persona(persona_id)
+    if persona:
+        system_prompt = persona["prompt"]
+
     # Create or reuse conversation
     if not conv_id:
         conv_id = uuid.uuid4().hex[:12]
-        chat_history.create_conversation(conv_id, model=model or settings.DEFAULT_MODEL)
+        chat_history.create_conversation(conv_id, model=model or settings.DEFAULT_MODEL, persona_id=persona_id)
 
     # Save user message
     chat_history.add_message(conv_id, "user", message, images=",".join(images_b64[:1]) if images_b64 else "")
@@ -119,6 +126,7 @@ async def chat(request: Request):
             context=context,
             history=history,
             images=images_b64 if images_b64 else None,
+            system_prompt=system_prompt,
         ):
             full_text += token
             yield f"data: {json.dumps({'token': token})}\n\n"
@@ -265,8 +273,8 @@ async def watcher_scan_now():
 # ── API: Chat History ─────────────────────────────────
 
 @app.get("/api/conversations")
-async def list_conversations():
-    convs = chat_history.list_conversations(limit=50)
+async def list_conversations(folder: str = None, tag: str = None):
+    convs = chat_history.list_conversations(limit=50, folder=folder, tag=tag)
     return {"conversations": convs}
 
 
@@ -311,6 +319,67 @@ async def export_conversation(conv_id: str, format: str = "md"):
             return FileResponse(result["path"], filename=result["filename"], media_type="application/pdf")
         return JSONResponse(result, status_code=500)
     return JSONResponse({"error": "Unsupported format. Use 'md' or 'pdf'"}, status_code=400)
+
+
+# ── API: Search ───────────────────────────────────────
+
+@app.get("/api/conversations/search/{query}")
+async def search_conversations(query: str):
+    results = chat_history.search(query)
+    return {"results": results, "query": query}
+
+
+# ── API: Conversation Metadata ────────────────────────
+
+@app.patch("/api/conversations/{conv_id}/meta")
+async def update_conversation_meta(conv_id: str, request: Request):
+    """Update folder, tags, or persona for a conversation."""
+    body = await request.json()
+    chat_history.update_conversation(conv_id, **body)
+    return {"status": "ok"}
+
+
+@app.get("/api/folders")
+async def list_folders():
+    return {"folders": chat_history.get_folders()}
+
+
+@app.get("/api/tags")
+async def list_tags():
+    return {"tags": chat_history.get_all_tags()}
+
+
+# ── API: Personas ─────────────────────────────────────
+
+@app.get("/api/personas")
+async def api_list_personas():
+    return {"personas": chat_history.list_personas()}
+
+
+@app.get("/api/personas/{persona_id}")
+async def api_get_persona(persona_id: str):
+    p = chat_history.get_persona(persona_id)
+    if not p:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return p
+
+
+@app.post("/api/personas")
+async def api_save_persona(request: Request):
+    body = await request.json()
+    pid = body.get("id", uuid.uuid4().hex[:8])
+    name = body.get("name", "").strip()
+    prompt = body.get("prompt", "").strip()
+    if not name or not prompt:
+        return JSONResponse({"error": "Name and prompt required"}, status_code=400)
+    result = chat_history.save_persona(pid, name, prompt)
+    return {"status": "ok", **result}
+
+
+@app.delete("/api/personas/{persona_id}")
+async def api_delete_persona(persona_id: str):
+    chat_history.delete_persona(persona_id)
+    return {"status": "ok"}
 
 
 # ── API: Document Generation ──────────────────────────

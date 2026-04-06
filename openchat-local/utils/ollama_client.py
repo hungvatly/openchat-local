@@ -59,10 +59,12 @@ class OllamaClient:
         context: str = "",
         history: List[Dict] = None,
         images: List[str] = None,
+        system_prompt: str = None,
     ) -> AsyncGenerator[str, None]:
         """Stream a chat completion from Ollama. images = list of base64 strings."""
         model = model or settings.DEFAULT_MODEL
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        prompt = system_prompt or SYSTEM_PROMPT
+        messages = [{"role": "system", "content": prompt}]
 
         if history:
             for h in history[-10:]:
