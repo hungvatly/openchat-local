@@ -122,10 +122,14 @@ function setupListeners() {
 
     $(".refresh-btn").addEventListener("click", shufflePrompts);
 
-    // Sidebar buttons
+    // Sidebar
     $("#btn-new-chat").addEventListener("click", clearChat);
-    $("#btn-upload").addEventListener("click", openUploadPanel);
-    $("#btn-settings").addEventListener("click", openSettingsPanel);
+    const toggle = $("#sidebar-toggle");
+    if (toggle) {
+        toggle.addEventListener("click", () => {
+            $(".sidebar").classList.toggle("collapsed");
+        });
+    }
 
     // Panels
     $$(".panel-overlay").forEach((overlay) => {
@@ -595,19 +599,71 @@ async function loadConversations() {
     try {
         const res = await fetch("/api/conversations");
         const data = await res.json();
-        const list = $("#conversation-list");
-        if (!list) return;
+        const container = $("#sidebar-sessions");
+        if (!container) return;
 
-        list.innerHTML = "";
-        (data.conversations || []).forEach((c) => {
+        container.innerHTML = "";
+        const convs = data.conversations || [];
+
+        if (convs.length === 0) {
+            container.innerHTML = '<div style="padding:12px 6px;font-size:12px;color:var(--text-muted)">No conversations yet</div>';
+            return;
+        }
+
+        // Group by date
+        const today = new Date().toDateString();
+        const yesterday = new Date(Date.now() - 86400000).toDateString();
+        let lastGroup = "";
+
+        convs.forEach((c) => {
+            const d = new Date(c.updated_at * 1000).toDateString();
+            let group = "Older";
+            if (d === today) group = "Today";
+            else if (d === yesterday) group = "Yesterday";
+            else {
+                const days = Math.floor((Date.now() - c.updated_at * 1000) / 86400000);
+                if (days <= 7) group = "This week";
+                else if (days <= 30) group = "This month";
+            }
+
+            if (group !== lastGroup) {
+                const label = document.createElement("div");
+                label.className = "sidebar-label";
+                label.textContent = group;
+                container.appendChild(label);
+                lastGroup = group;
+            }
+
             const item = document.createElement("div");
-            item.className = "conv-item" + (c.id === state.conversationId ? " active" : "");
+            item.className = "session-item" + (c.id === state.conversationId ? " active" : "");
             item.innerHTML = `
-                <span class="conv-title" onclick="loadConversation('${c.id}')">${escapeHtml(c.title)}</span>
-                <button class="conv-delete" onclick="event.stopPropagation();deleteConversation('${c.id}')">x</button>
+                <span class="session-title" onclick="loadConversation('${c.id}')">${escapeHtml(c.title || 'New Chat')}</span>
+                <div class="session-actions">
+                    <button class="session-action-btn" onclick="event.stopPropagation();renameSession('${c.id}', this)" title="Rename">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="session-action-btn delete" onclick="event.stopPropagation();deleteConversation('${c.id}')" title="Delete">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                </div>
             `;
-            list.appendChild(item);
+            container.appendChild(item);
         });
+
+        // Update history panel too if open
+        const historyList = $("#conversation-list");
+        if (historyList) {
+            historyList.innerHTML = "";
+            convs.forEach((c) => {
+                const item = document.createElement("div");
+                item.className = "conv-item" + (c.id === state.conversationId ? " active" : "");
+                item.innerHTML = `
+                    <span class="conv-title" onclick="loadConversation('${c.id}')">${escapeHtml(c.title || 'New Chat')}</span>
+                    <button class="conv-delete" onclick="event.stopPropagation();deleteConversation('${c.id}')">x</button>
+                `;
+                historyList.appendChild(item);
+            });
+        }
     } catch {}
 }
 
@@ -634,9 +690,43 @@ async function loadConversation(convId) {
 }
 
 async function deleteConversation(convId) {
+    if (!confirm("Delete this conversation?")) return;
     await fetch(`/api/conversations/${convId}`, { method: "DELETE" });
     if (state.conversationId === convId) clearChat();
     loadConversations();
+}
+
+async function renameSession(convId, btnEl) {
+    const sessionItem = btnEl.closest(".session-item");
+    const titleEl = sessionItem.querySelector(".session-title");
+    const currentTitle = titleEl.textContent;
+
+    // Replace title with input
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "session-rename-input";
+    input.value = currentTitle;
+    titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const save = async () => {
+        const newTitle = input.value.trim();
+        if (newTitle && newTitle !== currentTitle) {
+            await fetch(`/api/conversations/${convId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title: newTitle }),
+            });
+        }
+        loadConversations();
+    };
+
+    input.addEventListener("blur", save);
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+        if (e.key === "Escape") { input.value = currentTitle; input.blur(); }
+    });
 }
 
 async function exportConversation(format) {
@@ -767,6 +857,117 @@ function stopRecording() {
     if (state.mediaRecorder && state.isRecording) {
         state.mediaRecorder.stop();
         state.isRecording = false;
+    }
+}
+
+// ── Templates ─────────────────────
+
+async function openTemplatesPanel() {
+    $("#templates-panel").classList.add("active");
+    await loadTemplateList();
+}
+
+async function loadTemplateList() {
+    try {
+        const res = await fetch("/api/templates");
+        const data = await res.json();
+        const list = $("#template-list");
+        const select = $("#template-select");
+        if (!list || !select) return;
+
+        list.innerHTML = "";
+        // Keep first option
+        select.innerHTML = '<option value="">Select a template...</option>';
+
+        (data.templates || []).forEach((t) => {
+            const item = document.createElement("div");
+            item.className = "file-item";
+            item.innerHTML = `
+                <span class="file-name">${escapeHtml(t.name)} <span style="color:var(--text-muted);font-size:11px">(${t.fields} fields)</span></span>
+                <button onclick="deleteTemplate('${t.id}')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px">delete</button>
+            `;
+            list.appendChild(item);
+
+            const opt = document.createElement("option");
+            opt.value = t.id;
+            opt.textContent = t.name;
+            select.appendChild(opt);
+        });
+    } catch {}
+}
+
+async function uploadTemplate() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".docx,.pdf,.txt,.md";
+
+    input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+
+        const statusEl = $("#template-status");
+        statusEl.textContent = `Analyzing ${file.name}...`;
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await fetch("/api/templates/upload", { method: "POST", body: formData });
+            const data = await res.json();
+
+            if (data.status === "ok") {
+                statusEl.textContent = `Template saved! Detected ${data.fields} fillable fields.`;
+                await loadTemplateList();
+            } else {
+                statusEl.textContent = `Error: ${data.error}`;
+            }
+        } catch (err) {
+            statusEl.textContent = `Upload failed: ${err.message}`;
+        }
+    };
+    input.click();
+}
+
+async function deleteTemplate(templateId) {
+    await fetch(`/api/templates/${templateId}`, { method: "DELETE" });
+    await loadTemplateList();
+}
+
+async function fillTemplate(format) {
+    const templateId = $("#template-select").value;
+    const instructions = $("#fill-instructions").value.trim();
+    const statusEl = $("#fill-status");
+
+    if (!templateId) {
+        statusEl.textContent = "Please select a template first.";
+        return;
+    }
+    if (!instructions) {
+        statusEl.textContent = "Please enter the information to fill in.";
+        return;
+    }
+
+    statusEl.textContent = "AI is filling the template... (this may take a moment)";
+
+    try {
+        const res = await fetch(`/api/templates/${templateId}/fill`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                instructions: instructions,
+                model: state.model,
+                output_format: format === "pdf" ? ".pdf" : ".docx",
+            }),
+        });
+        const data = await res.json();
+
+        if (data.status === "ok" && data.url) {
+            statusEl.innerHTML = `Done! <a href="${data.url}" download="${data.filename}" style="color:var(--accent);text-decoration:underline">Download ${data.filename}</a>`;
+        } else {
+            statusEl.textContent = `Error: ${data.message || "Generation failed"}`;
+        }
+    } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
     }
 }
 

@@ -29,6 +29,44 @@ def load_txt(filepath: str) -> str:
 
 
 def load_pdf(filepath: str) -> str:
+    # Try pymupdf first (handles most PDFs)
+    try:
+        import fitz
+        doc = fitz.open(filepath)
+        text = ""
+        for page in doc:
+            text += page.get_text() + "\n"
+        doc.close()
+        if text.strip():
+            return text
+
+        # No text found — scanned PDF, try OCR
+        try:
+            import pytesseract
+            from PIL import Image
+            import io
+            doc = fitz.open(filepath)
+            ocr_text = ""
+            for page in doc:
+                pix = page.get_pixmap(dpi=200)
+                img = Image.open(io.BytesIO(pix.tobytes("png")))
+                page_text = pytesseract.image_to_string(img)
+                ocr_text += page_text + "\n"
+            doc.close()
+            if ocr_text.strip():
+                print(f"  [PDF] OCR extracted {len(ocr_text)} chars from {filepath}")
+                return ocr_text
+        except ImportError:
+            print("  [PDF] Scanned PDF but pytesseract not installed. Run: pip install pytesseract && brew install tesseract")
+        except Exception as e:
+            print(f"  [PDF] OCR failed: {e}")
+
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    # Fallback to PyPDF2
     try:
         from PyPDF2 import PdfReader
         reader = PdfReader(filepath)
@@ -38,8 +76,10 @@ def load_pdf(filepath: str) -> str:
             if extracted:
                 text += extracted + "\n"
         return text
-    except Exception as e:
-        return f"[Error reading PDF: {e}]"
+    except Exception:
+        pass
+
+    return ""
 
 
 def load_docx(filepath: str) -> str:

@@ -21,6 +21,10 @@ from utils.folder_watcher import folder_watcher
 from utils.chat_history import chat_history
 from utils.doc_generator import detect_and_generate, generate_docx, generate_pdf, generate_xlsx
 from utils.voice_input import transcribe_audio, is_available as whisper_available
+from utils.template_engine import (
+    save_template, list_templates, get_template, delete_template,
+    build_fill_prompt, generate_from_template
+)
 
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -280,6 +284,16 @@ async def delete_conversation(conv_id: str):
     return {"status": "ok"}
 
 
+@app.patch("/api/conversations/{conv_id}")
+async def rename_conversation(conv_id: str, request: Request):
+    body = await request.json()
+    title = body.get("title", "").strip()
+    if not title:
+        return JSONResponse({"error": "Empty title"}, status_code=400)
+    chat_history.update_title(conv_id, title)
+    return {"status": "ok", "title": title}
+
+
 @app.get("/api/conversations/{conv_id}/export")
 async def export_conversation(conv_id: str, format: str = "md"):
     if format == "md":
@@ -360,6 +374,95 @@ async def voice_transcribe(file: UploadFile = File(...)):
 @app.get("/api/voice/status")
 async def voice_status():
     return {"available": whisper_available()}
+
+
+# ── API: Templates ────────────────────────────────────
+
+@app.post("/api/templates/upload")
+async def upload_template(file: UploadFile = File(...)):
+    """Upload a form/template document for reuse."""
+    ext = os.path.splitext(file.filename)[1].lower()
+    allowed = {".txt", ".pdf", ".docx", ".md"}
+    if ext not in allowed:
+        return JSONResponse(
+            {"error": f"Unsupported template type: {ext}. Use: {', '.join(allowed)}"},
+            status_code=400,
+        )
+
+    # Save to temp then register as template
+    tmp_path = os.path.join(settings.UPLOAD_DIR, f"tmp_{uuid.uuid4().hex}_{file.filename}")
+    content = await file.read()
+    with open(tmp_path, "wb") as f:
+        f.write(content)
+
+    result = save_template(tmp_path, file.filename)
+    os.remove(tmp_path)
+
+    return {
+        "status": "ok",
+        "template_id": result["id"],
+        "name": result["name"],
+        "fields": len(result.get("structure", {}).get("fields", [])),
+        "structure": result.get("structure", {}),
+    }
+
+
+@app.get("/api/templates")
+async def api_list_templates():
+    return {"templates": list_templates()}
+
+
+@app.get("/api/templates/{template_id}")
+async def api_get_template(template_id: str):
+    t = get_template(template_id)
+    if not t:
+        return JSONResponse({"error": "Template not found"}, status_code=404)
+    return t
+
+
+@app.delete("/api/templates/{template_id}")
+async def api_delete_template(template_id: str):
+    delete_template(template_id)
+    return {"status": "ok"}
+
+
+@app.post("/api/templates/{template_id}/fill")
+async def fill_template(template_id: str, request: Request):
+    """Fill a template with AI using user instructions.
+    The AI generates content matching the template structure,
+    then a document is created from that content.
+    """
+    body = await request.json()
+    instructions = body.get("instructions", "")
+    model = body.get("model", None)
+    output_format = body.get("output_format", None)  # ".docx", ".pdf", or None (auto)
+
+    if not instructions.strip():
+        return JSONResponse({"error": "No instructions provided"}, status_code=400)
+
+    template = get_template(template_id)
+    if not template:
+        return JSONResponse({"error": "Template not found"}, status_code=404)
+
+    # Build the prompt
+    fill_prompt = build_fill_prompt(template, instructions)
+
+    # Get AI to fill the template
+    full_response = ""
+    async for token in ollama_client.stream_chat(
+        message=fill_prompt,
+        model=model,
+        context="",
+        history=[],
+    ):
+        full_response += token
+
+    # Generate the document
+    result = generate_from_template(template_id, full_response, output_format)
+    if result.get("status") == "ok":
+        result["url"] = f"/files/{result['filename']}"
+
+    return result
 
 
 # ── Startup ────────────────────────────────────────────
